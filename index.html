@@ -6,12 +6,12 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 100%;
             padding: 20px;
             text-align: center;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             min-height: 100vh;
+            margin: 0;
         }
         .container {
             background: rgba(255, 255, 255, 0.1);
@@ -27,6 +27,7 @@
             border: 3px solid white;
             border-radius: 10px;
             margin: 20px 0;
+            background: black;
         }
         button {
             padding: 12px 24px;
@@ -78,27 +79,30 @@
         </div>
         
         <div class="info">
-            <p>Receiver URL: <span id="receiverUrl">Not set</span></p>
+            <p>Receiver: <strong>cam-receiver.vercel.app</strong></p>
             <p>Frames sent: <span id="frameCount">0</span></p>
+            <p>Last sent: <span id="lastSent">Never</span></p>
         </div>
     </div>
 
     <script>
-        // Configuration - CHANGE THIS TO YOUR RECEIVER URL
+        // Configuration - USING YOUR ACTUAL RECEIVER URL
         const RECEIVER_URL = "https://cam-receiver.vercel.app";
         
         let currentStream = null;
         let isSending = false;
         let sendInterval;
         let frameCount = 0;
-        
-        // Update receiver URL display
-        document.getElementById('receiverUrl').textContent = RECEIVER_URL;
+        let receiverWindow = null;
         
         function updateStatus(message, isError = false) {
             const status = document.getElementById('status');
             status.textContent = message;
             status.style.background = isError ? 'rgba(255, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.3)';
+        }
+        
+        function updateLastSent() {
+            document.getElementById('lastSent').textContent = new Date().toLocaleTimeString();
         }
         
         async function startCamera() {
@@ -134,15 +138,21 @@
             frameCount = 0;
             updateStatus("Sending frames to receiver...");
             
-            // Send frame every 2 seconds
-            sendInterval = setInterval(sendFrame, 2000);
+            // Open receiver window first
+            receiverWindow = window.open(RECEIVER_URL, 'receiverWindow', 'width=600,height=800');
+            
+            // Start sending frames every 3 seconds
+            sendInterval = setInterval(sendFrame, 3000);
             
             document.getElementById('sendBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
+            
+            // Send first frame immediately
+            setTimeout(sendFrame, 1000);
         }
         
         function sendFrame() {
-            if (!isSending) return;
+            if (!isSending || !currentStream) return;
             
             const video = document.getElementById('webcam');
             const canvas = document.getElementById('canvas');
@@ -158,25 +168,38 @@
             // Convert to data URL
             const imageData = canvas.toDataURL('image/jpeg', 0.7);
             
-            // Send to receiver using image URL method
+            // Send to receiver
             sendToReceiver(imageData);
             
             frameCount++;
             document.getElementById('frameCount').textContent = frameCount;
+            updateLastSent();
         }
         
         function sendToReceiver(imageData) {
-            // Method 1: Open receiver in new window/tab (simplest)
-            const receiverWindow = window.open(`${RECEIVER_URL}?image=${encodeURIComponent(imageData)}&time=${Date.now()}`, 'receiverWindow');
+            // Method 1: Update the receiver window if it's open
+            if (receiverWindow && !receiverWindow.closed) {
+                try {
+                    receiverWindow.postMessage({
+                        type: 'newImage',
+                        image: imageData,
+                        timestamp: Date.now(),
+                        frameNumber: frameCount
+                    }, RECEIVER_URL);
+                } catch (error) {
+                    console.log('Window communication error:', error);
+                }
+            }
             
-            // Method 2: Use fetch API (requires CORS)
-            /*
-            fetch(`${RECEIVER_URL}/api/receive`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: imageData, timestamp: Date.now() })
-            }).catch(error => console.log('Send error:', error));
-            */
+            // Method 2: Also use URL method as backup
+            const newWindow = window.open(`${RECEIVER_URL}?image=${encodeURIComponent(imageData)}&frame=${frameCount}&time=${Date.now()}`, '_blank');
+            
+            // Close the backup window after a moment
+            setTimeout(() => {
+                if (newWindow && !newWindow.closed) {
+                    newWindow.close();
+                }
+            }, 1000);
         }
         
         function stopEverything() {
@@ -200,5 +223,4 @@
         window.addEventListener('beforeunload', stopEverything);
     </script>
 </body>
-
 </html>
