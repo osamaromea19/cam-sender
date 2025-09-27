@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Camera Sender</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 100%;
+            padding: 20px;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        video {
+            width: 100%;
+            max-width: 300px;
+            border: 3px solid white;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        button {
+            padding: 12px 24px;
+            margin: 10px;
+            font-size: 16px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 15px;
+            margin: 15px 0;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .info {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📷 Camera Sender</h1>
+        <p>This site captures camera feed and sends to receiver</p>
+        
+        <video id="webcam" autoplay muted playsinline></video>
+        <canvas id="canvas" style="display: none;"></canvas>
+        
+        <div class="status" id="status">Ready to start</div>
+        
+        <div>
+            <button onclick="startCamera()" id="startBtn">Start Camera</button>
+            <button onclick="startSending()" id="sendBtn" disabled>Start Sending</button>
+            <button onclick="stopEverything()" id="stopBtn" disabled>Stop Everything</button>
+        </div>
+        
+        <div class="info">
+            <p>Receiver URL: <span id="receiverUrl">Not set</span></p>
+            <p>Frames sent: <span id="frameCount">0</span></p>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - CHANGE THIS TO YOUR RECEIVER URL
+        const RECEIVER_URL = "https://your-receiver-site.vercel.app";
+        
+        let currentStream = null;
+        let isSending = false;
+        let sendInterval;
+        let frameCount = 0;
+        
+        // Update receiver URL display
+        document.getElementById('receiverUrl').textContent = RECEIVER_URL;
+        
+        function updateStatus(message, isError = false) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.style.background = isError ? 'rgba(255, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.3)';
+        }
+        
+        async function startCamera() {
+            try {
+                stopEverything();
+                
+                updateStatus("Requesting camera access...");
+                
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 640, height: 480 }
+                });
+                
+                currentStream = stream;
+                const video = document.getElementById('webcam');
+                video.srcObject = stream;
+                
+                updateStatus("Camera active! Click 'Start Sending'");
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('sendBtn').disabled = false;
+                
+            } catch (error) {
+                updateStatus("Camera error: " + error.message, true);
+            }
+        }
+        
+        function startSending() {
+            if (!currentStream) {
+                updateStatus("Start camera first!", true);
+                return;
+            }
+            
+            isSending = true;
+            frameCount = 0;
+            updateStatus("Sending frames to receiver...");
+            
+            // Send frame every 2 seconds
+            sendInterval = setInterval(sendFrame, 2000);
+            
+            document.getElementById('sendBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+        }
+        
+        function sendFrame() {
+            if (!isSending) return;
+            
+            const video = document.getElementById('webcam');
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+            
+            // Set canvas size to match video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Capture frame
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Convert to data URL
+            const imageData = canvas.toDataURL('image/jpeg', 0.7);
+            
+            // Send to receiver using image URL method
+            sendToReceiver(imageData);
+            
+            frameCount++;
+            document.getElementById('frameCount').textContent = frameCount;
+        }
+        
+        function sendToReceiver(imageData) {
+            // Method 1: Open receiver in new window/tab (simplest)
+            const receiverWindow = window.open(`${RECEIVER_URL}?image=${encodeURIComponent(imageData)}&time=${Date.now()}`, 'receiverWindow');
+            
+            // Method 2: Use fetch API (requires CORS)
+            /*
+            fetch(`${RECEIVER_URL}/api/receive`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: imageData, timestamp: Date.now() })
+            }).catch(error => console.log('Send error:', error));
+            */
+        }
+        
+        function stopEverything() {
+            isSending = false;
+            clearInterval(sendInterval);
+            
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+            }
+            
+            document.getElementById('webcam').srcObject = null;
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('sendBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = true;
+            
+            updateStatus("Stopped");
+        }
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', stopEverything);
+    </script>
+</body>
+</html>
